@@ -9,10 +9,10 @@ This is the first and only *individual* (as opposed to *team*) this semester.
 
 Term: Fall 2018
 
-+ Projec title: Lorem ipsum dolor sit amet
-+ This project is conducted by [your name]
++ Project title: A Generational Comparison of Happiness
++ This project is conducted by Kayla Smith (kys2112).
 
-+ Project summary: [a short summary] Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
++ Project summary: During this project I analyzed responses to "What made you happy today?" collected in the HappyDB corpus, with an emphasis on generational differences. I used text mining and sentiment analysis techniques to evaluate responses and explore trends. In particular, I focused on the youngest and oldest cohorts of responders to determine if significant differences were evident between Gen-Z and the Silent Generation. Ultimately I found that, as predicted, Gen-Z and the Silent Generation explore a wide range of topics. In particular, sentiment analysis for the Silent Generation reveals more severe concerns such as death and injury. However, despite being in very different stages of life, the two generations display an interest in family and leisure, demonstrating common themes across the generational spectrum.
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
 
