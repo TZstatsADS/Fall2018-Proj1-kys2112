@@ -19,19 +19,31 @@ setwd("/Users/kaylasmith/Fall2018-Proj1-kys2112/doc")
 While people all walks of life experience happiness, what makes people happy can vary with experience. This study aims to demonstrate the ways in which people of different generations find happiness. In particular, this project focuses on Generation Z and the Silent Generation, respectively the youngest and oldest generations included in the HappyDB corpus, to see how people multiple generations apart experience happiness (Dimock).
 
 ```{r load libraries, warning=FALSE, error=FALSE, echo=FALSE, message=FALSE}
+
+## install/load libraries
+packages.used=c("tm", "tidytext", "tidyverse", "wordcloud",
+                "ggplot2", "dplyr", "wordcloud", "topicmodels", 
+                "ngram", "quanteda", "reshape2")
+
+# check packages that need to be installed
+packages.needed=setdiff(packages.used, 
+                        intersect(installed.packages()[,1], 
+                                  packages.used))
+# install additional packages
+if(length(packages.needed)>0){
+  install.packages(packages.needed, dependencies = TRUE)
+}
+
 library(tm)
 library(tidytext)
 library(tidyverse)
-library(DT)
-library(scales)
+library(ggplot2)
+library(dplyr)
 library(wordcloud)
-library(ngram)
-library(igraph)
 library(topicmodels)
-library(ggraph)
-library(tidyr)
-library(reshape2)
+library(ngram)
 library(quanteda)
+library(reshape2)
 ```
 
 
@@ -95,7 +107,8 @@ hm_top_terms %>%
   ggplot(aes(term, beta, fill = factor(topic))) +
   geom_col(show.legend = FALSE) +
   facet_wrap(~ topic, scales = "free") +
-  coord_flip()
+  coord_flip() +
+  ggtitle("Topic Model for Silent Generation")
 ```
 
 Using Latent Dirichlet Allocation (LDA) I was able to assess common topics among the Silent Generation. Topic 1 contains mostly leisure, evidenced most clearly by the terms baseball and game, with related words player and card also included. In comparison, Topic 2 is more serious and oriented around family and homelife.  
@@ -121,7 +134,8 @@ hm_top_terms %>%
   ggplot(aes(term, beta, fill = factor(topic))) +
   geom_col(show.legend = FALSE) +
   facet_wrap(~ topic, scales = "free") +
-  coord_flip()
+  coord_flip() +
+  ggtitle("Topic Model for Generation Z")
 ```
 
 Similarly, I used LDA to find common topics for Generation-Z. Compared to the topic modeling for the Silent Generation, there is more overlap for younger responders. However, overall there remains a trend of more leisure activity in Topic 1, indicated by words such as played and video, and mentions of loved ones in Topic 2.
@@ -131,9 +145,6 @@ In addition, log-ratio exhibits difference in concerns for the two generations. 
 ```{r bag of words, warning=FALSE, message=FALSE, echo=FALSE}
 bag_of_words <-  hm_data %>%
   unnest_tokens(word, text)
-
-word_count <- bag_of_words %>%
-  count(word, sort = TRUE)
 ```
 
 ```{r logratio}
@@ -157,20 +168,11 @@ bag_of_words %>%
   geom_col(show.legend = F) +
   coord_flip() +
   ylab("log odds ratio (Gen-Z/Silent)") +
-  scale_fill_discrete(name = "", labels = c("Gen-Z", "Silent"))
+  scale_fill_discrete(name = "", labels = c("Gen-Z", "Silent")) +
+  ggtitle("Gen-Z/Silent Log Ratio")
 ```
 
 ### Bigrams
-
-```{r bigram, warning=FALSE, message=FALSE}
-hm_bigrams <- hm_data %>%
-  filter(count != 1) %>%
-  unnest_tokens(bigram, text, token = "ngrams", n = 2)
-
-bigram_counts <- hm_bigrams %>%
-  separate(bigram, c("word1", "word2"), sep = " ") %>%
-  count(word1, word2, sort = TRUE)
-```
 
 An evaluation of bigrams contextualizes the comparison of happy moments between Generation Z and the Silent Generation. For example, while earlier topic modeling showed an interest in video for Generation Z, bigrams emphasize and add clarifications to this point. The bigrams video game and watched movie tell us exactly what Generation Z commonly views for entertainment, and the appearance of the words video or watch in 3 of the top 10 bigrams demonstrates how frequent screen time is for this generation. In contrast, baseball appears in 3 of the 10 bigrams for the Silent Generation, indicating the importance of this pastime for the generation. 
 
@@ -178,7 +180,9 @@ Furthermore, like the topic modeling previously, the bigram graph shows that lei
 
 ```{r bigrams comp, message=FALSE}
 # Gen-Z and Silent Gen Bigrams Comparison
-hm_bigrams %>%
+hm_data %>%
+  filter(count != 1) %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
   count(!!as.name("generation"), bigram, sort = TRUE) %>%
   group_by(!!as.name("generation")) %>%
   top_n(10) %>%
@@ -189,7 +193,8 @@ hm_bigrams %>%
   ggplot(aes(bigram, n, fill = !!as.name("generation"))) +
   geom_col(show.legend = FALSE) +
   facet_wrap(as.formula(paste("~", "generation")), ncol = 2, scales = "free") +
-  coord_flip()
+  coord_flip() +
+  ggtitle("Gen-Z and Silent Gen Bigrams Comparison")
 ```
 
 ### Word Cloud Sentiment Analysis
@@ -203,8 +208,7 @@ bag_of_words %>%
   inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) %>%
   acast(word ~ sentiment, value.var = "n", fill = 0) %>%
-  comparison.cloud(colors = c("red", "blue"),
-                   max.words = 40)
+  comparison.cloud(colors = c("red", "blue"), max.words = 40)
 ```
 
 Negative sentiments for Generation Z express a focus on internal struggle, evidenced by words such as worried, failed and stress.
@@ -216,8 +220,7 @@ bag_of_words %>%
   inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) %>%
   acast(word ~ sentiment, value.var = "n", fill = 0) %>%
-  comparison.cloud(colors = c("red", "blue"),
-                   max.words = 40)
+  comparison.cloud(colors = c("red", "blue"), max.words = 40)
 ```
 
 In contrast, negative sentiments for the Silent Generation emphasize more severe, uncontrollable and physical concerns, notably including terms such as died, pain and sick.
@@ -235,7 +238,8 @@ hm_data %>%
   filter(generation=="Silent" | generation == "GenZ") %>%
   ggplot(aes(x=generation, y=words_per_sentence, fill=generation)) +
   geom_bar(stat = "summary", fun.y = "mean", show.legend = FALSE) +
-  ylab("avg words per sentence") 
+  ylab("avg words per sentence") +
+  ggtitle("Average Sentence Length for Gen-Z and Silent Gen")
 ```
 
 ### Conclusion
