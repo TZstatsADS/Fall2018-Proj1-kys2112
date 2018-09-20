@@ -1,0 +1,251 @@
+---
+title: "A Generational Comparison of Happiness"
+author: "Kayla Smith"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r path,echo=FALSE}
+# set path
+setwd("/Users/kaylasmith/Fall2018-Proj1-kys2112/doc")
+```
+
+\newline
+![](../figs/title.jpeg)
+\newline
+<font size=3>
+
+While people all walks of life experience happiness, what makes people happy can vary with experience. This study aims to demonstrate the ways in which people of different generations find happiness. In particular, this project focuses on Generation Z and the Silent Generation, respectively the youngest and oldest generations included in the HappyDB corpus, to see how people multiple generations apart experience happiness (Dimock).
+
+```{r load libraries, warning=FALSE, error=FALSE, echo=FALSE, message=FALSE}
+library(tm)
+library(tidytext)
+library(tidyverse)
+library(DT)
+library(scales)
+library(wordcloud)
+library(ngram)
+library(igraph)
+library(topicmodels)
+library(ggraph)
+library(tidyr)
+library(reshape2)
+library(quanteda)
+```
+
+
+```{r load data, warning=FALSE, echo=FALSE, message=FALSE}
+hm_data <- read_csv("../output/processed_moments.csv")
+
+urlfile<-'https://raw.githubusercontent.com/rit-public/HappyDB/master/happydb/data/demographic.csv'
+demo_data <- read_csv(urlfile)
+```
+
+```{r combining data, warning=FALSE, error=FALSE, echo=FALSE, message=FALSE}
+hm_data <- hm_data %>%
+  inner_join(demo_data, by = "wid") %>%
+  select(wid,
+         original_hm,
+         gender, 
+         marital, 
+         parenthood,
+         reflection_period,
+         age, 
+         country, 
+         ground_truth_category, 
+         text) %>%
+  mutate(count = sapply(hm_data$text, wordcount)) %>%
+  filter(gender %in% c("m", "f")) %>%
+  filter(marital %in% c("single", "married")) %>%
+  filter(parenthood %in% c("n", "y")) %>%
+  filter(reflection_period %in% c("24h", "3m")) %>%
+  mutate(reflection_period = fct_recode(reflection_period, 
+                                        months_3 = "3m", hours_24 = "24h"))
+```
+
+```{r adding columns to data, echo=FALSE, warning=FALSE}
+levels <- c(0, 21, 37, 53, 72, 90)
+labels <- c("GenZ", "GenY", "GenX", "Boomers", "Silent")
+hm_data$generation <- cut(as.numeric(hm_data$age), levels, labels)
+hm_data$words_per_sentence <- sapply(hm_data$original_hm, wordcount)/nsentence(hm_data$original_hm)
+hm_data$n_sentences <- nsentence(hm_data$original_hm)
+```
+
+### Topic Modeling
+
+```{r lda silent}
+# LDA topic modeling for Silent Generation
+corpus <- VCorpus(VectorSource(hm_data$text[hm_data$generation=="Silent"]))
+hm_dtm <- DocumentTermMatrix(corpus)
+rowTotals <- slam::row_sums(hm_dtm)
+hm_dtm.new <- hm_dtm[rowTotals > 0, ]
+hm_lda <- LDA(hm_dtm.new, k = 2, control = list(seed = 1234))
+hm_topics <- tidy(hm_lda, matrix = "beta")
+
+hm_top_terms <- hm_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+# Plot of top ten terms in topic model
+hm_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
+Using Latent Dirichlet Allocation (LDA) I was able to assess common topics among the Silent Generation. Topic 1 contains mostly leisure, evidenced most clearly by the terms baseball and game, with related words player and card also included. In comparison, Topic 2 is more serious and oriented around family and homelife.  
+
+```{r lda genz}
+# LDA topic modeling for Generation Z
+corpus <- VCorpus(VectorSource(hm_data$text[hm_data$generation=="GenZ"]))
+hm_dtm <- DocumentTermMatrix(corpus)
+rowTotals <- slam::row_sums(hm_dtm)
+hm_dtm.new <- hm_dtm[rowTotals > 0, ]
+hm_lda <- LDA(hm_dtm.new, k = 2, control = list(seed = 1234))
+hm_topics <- tidy(hm_lda, matrix = "beta")
+
+hm_top_terms <- hm_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+# Plot of top ten terms in topic model
+hm_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
+Similarly, I used LDA to find common topics for Generation-Z. Compared to the topic modeling for the Silent Generation, there is more overlap for younger responders. However, overall there remains a trend of more leisure activity in Topic 1, indicated by words such as played and video, and mentions of loved ones in Topic 2.
+
+In addition, log-ratio exhibits difference in concerns for the two generations. Expectedly, Generation Z respondents display more interest in school and relationships, while Silent Generation respondents are particularly concerned with their descendents, and the appearance of hawaii suggests more interest in vacationing as well.
+
+```{r bag of words, warning=FALSE, message=FALSE, echo=FALSE}
+bag_of_words <-  hm_data %>%
+  unnest_tokens(word, text)
+
+word_count <- bag_of_words %>%
+  count(word, sort = TRUE)
+```
+
+```{r logratio}
+# Gen-Z/Silent Log Ratio
+bag_of_words %>%
+  filter(!str_detect(word, "^@")) %>%
+  count(word, generation) %>%
+  group_by(word) %>%
+  filter(sum(n) >= 10) %>%
+  ungroup() %>%
+  spread(generation, n, fill = 0) %>%
+  mutate_if(is.numeric, funs((. + 1) / (sum(.) + 1))) %>%
+  mutate(logratio = log(GenZ / Silent)) %>%
+  arrange(desc(logratio)) %>%
+  arrange(abs(logratio)) %>%
+  group_by(logratio < 0) %>%
+  top_n(5, abs(logratio)) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, logratio)) %>%
+  ggplot(aes(word, logratio, fill = logratio < 0)) +
+  geom_col(show.legend = F) +
+  coord_flip() +
+  ylab("log odds ratio (Gen-Z/Silent)") +
+  scale_fill_discrete(name = "", labels = c("Gen-Z", "Silent"))
+```
+
+### Bigrams
+
+```{r bigram, warning=FALSE, message=FALSE}
+hm_bigrams <- hm_data %>%
+  filter(count != 1) %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)
+
+bigram_counts <- hm_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  count(word1, word2, sort = TRUE)
+```
+
+An evaluation of bigrams contextualizes the comparison of happy moments between Generation Z and the Silent Generation. For example, while earlier topic modeling showed an interest in video for Generation Z, bigrams emphasize and add clarifications to this point. The bigrams video game and watched movie tell us exactly what Generation Z commonly views for entertainment, and the appearance of the words video or watch in 3 of the top 10 bigrams demonstrates how frequent screen time is for this generation. In contrast, baseball appears in 3 of the 10 bigrams for the Silent Generation, indicating the importance of this pastime for the generation. 
+
+Furthermore, like the topic modeling previously, the bigram graph shows that leisure activities and time with friends are priorities for these two generations.
+
+```{r bigrams comp, message=FALSE}
+# Gen-Z and Silent Gen Bigrams Comparison
+hm_bigrams %>%
+  count(!!as.name("generation"), bigram, sort = TRUE) %>%
+  group_by(!!as.name("generation")) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(bigram = reorder(bigram, n)) %>%
+  drop_na() %>%
+  filter(generation=="Silent" | generation == "GenZ") %>%
+  ggplot(aes(bigram, n, fill = !!as.name("generation"))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(as.formula(paste("~", "generation")), ncol = 2, scales = "free") +
+  coord_flip()
+```
+
+### Word Cloud Sentiment Analysis
+
+Next, I analyzed the sentiments of both Generation Z and the Silent Generation.
+
+```{r sentiment cloud genz, message=FALSE}
+# Gen-Z Sentiment Word Cloud
+bag_of_words %>%
+  filter(generation=="GenZ") %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("red", "blue"),
+                   max.words = 40)
+```
+
+Negative sentiments for Generation Z express a focus on internal struggle, evidenced by words such as worried, failed and stress.
+
+```{r sentiment cloud silent, message=FALSE}
+#Silent Gen Sentiment Word Cloud
+bag_of_words %>%
+  filter(generation=="Silent") %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("red", "blue"),
+                   max.words = 40)
+```
+
+In contrast, negative sentiments for the Silent Generation emphasize more severe, uncontrollable and physical concerns, notably including terms such as died, pain and sick.
+
+Positive sentiments were more similar for the generations. However, terms such as recovery and restored further reveal health concerns for the Silent Generation.
+
+### Sentence Analysis
+
+The lengths of sentences for Generation Z and the Silent Generation show differences in communication. On average, Silent Generation responders used roughly 10 more words per sentence than Generation Z responders. The brevity of responses for Generation Z make sense in the context of the technological age, with social media platforms that enforce character limits and texting applications in which abbreviations, memes and emojis are commonplace forms of expression.
+
+```{r sentence len}
+# Gen-Z and Silent Gen Sentence Length
+hm_data %>%
+  drop_na() %>%
+  filter(generation=="Silent" | generation == "GenZ") %>%
+  ggplot(aes(x=generation, y=words_per_sentence, fill=generation)) +
+  geom_bar(stat = "summary", fun.y = "mean", show.legend = FALSE) +
+  ylab("avg words per sentence") 
+```
+
+### Conclusion
+
+A comparative analysis of happy moments for Generation Z and the Silent Generation showed that both generations value leisure and bonding with friends and family. While on average Generation Z prefers screen time, baseball appears to be a notable pastime for the Silent Generation. 
+
+Sentiment analysis ellucidates common concerns for both generations. Generation Z listed terms suggesting more internal struggles, while the Silent Generation showed more concern for physical health. 
+
+Lastly, average sentence length for the Silent Generation far exceeds that of Generation Z, a finding that may indicate how technological differences among generations impact communication styles.
+
+### References
+
+1. Dimock M. Defining generations: where millennials end and post-millennials begin. Pew Research Center. 2018.
